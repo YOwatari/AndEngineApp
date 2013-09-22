@@ -36,7 +36,6 @@ public class MainGameScene extends KeyListenScene implements
 	private List<Text> roleText = new ArrayList<Text>();
 
 	private Rectangle[] boxSprite = new Rectangle[6];
-	// private String[] role = { "人狼", "人狼", "村人", "村人", "占い師", "怪盗" };
 	private String[] role = { "占い師", "怪盗", "人狼", "人狼", "村人", "村人", };
 
 	// 12色のパステルカラー
@@ -47,13 +46,12 @@ public class MainGameScene extends KeyListenScene implements
 	private static final int PLAYERS_JOIN = 0;
 	private static final int PLAYERS_TURN = 1;
 	private static final int TALKING = 2;
+	private static final int VOTING = 3;
 	private int phase = PLAYERS_JOIN;
 
 	private int turnPlayer = 0;
-	private boolean goNextPlayer = false;
-
+	private boolean VillagersTurn = false;
 	private boolean FortuneTellerTurn = false;
-	private boolean JinrohTurn = false;
 	private boolean PhantomThiefTurn = false;
 
 	private int stealPlayerNumber = 7;
@@ -61,6 +59,9 @@ public class MainGameScene extends KeyListenScene implements
 
 	private int chronoCount = 0;
 	private boolean waitFlag = false;
+
+	private final int playerturnTime = 3;
+	private final int takingTime = 5;
 
 	private List<Integer> players = new ArrayList<Integer>();
 
@@ -108,7 +109,7 @@ public class MainGameScene extends KeyListenScene implements
 	 * 箱を配置する
 	 */
 	public void setBoxies() {
-		// RoleShuffle(role);
+		RoleShuffle(role);
 		for (int i = 0; i < boxSprite.length; i++) {
 			float size = getBaseActivity().getEngine().getCamera().getHeight() / 10.0f;
 			float margin = size / 2.0f;
@@ -166,11 +167,6 @@ public class MainGameScene extends KeyListenScene implements
 		}
 	}
 
-	public void messageRectangle() {
-		// messageRect = new Rectangle(pX, pY, pWidth, pHeight,
-		// pRectangleVertexBufferObject)
-	}
-
 	public void setRecangleButton() {
 		btn = new Rectangle(0, getBaseActivity().getEngine().getCamera()
 				.getHeight()
@@ -204,6 +200,11 @@ public class MainGameScene extends KeyListenScene implements
 		return t;
 	}
 
+	/**
+	 * タイマー表示
+	 * 
+	 * @param count
+	 */
 	private void SetChronometer(int count) {
 		chronoCount = count * 100;
 		// テキストを書く準備
@@ -216,11 +217,17 @@ public class MainGameScene extends KeyListenScene implements
 		getBaseActivity().getFontManager().loadFont(font);
 
 		// テキスト表示
-		String secounds = String.format("%02d", chronoCount / 100);
-		String centiSec = String.format("%02d", chronoCount % 100);
-		chronoMeterText = new Text(0, 0, font, secounds + "'" + centiSec, 80,
-				new TextOptions(HorizontalAlign.CENTER), getBaseActivity()
-						.getVertexBufferObjectManager());
+		String minutes = "00";
+		if (chronoCount / 100 / 60 > 0) {
+			minutes = String.format("%02d", chronoCount / 100 / 60);
+		}
+		String secounds = String.format("%02d",
+				(chronoCount - (chronoCount / 100 / 60) * 100 * 60) / 100);
+		String centiSec = String.format("%02d",
+				(chronoCount - (chronoCount / 100 / 60) * 100 * 60) % 100);
+		chronoMeterText = new Text(0, 0, font, minutes + ":" + secounds + "'"
+				+ centiSec, 80, new TextOptions(HorizontalAlign.CENTER),
+				getBaseActivity().getVertexBufferObjectManager());
 		chronoMeterText.setPosition(getBaseActivity().getEngine().getCamera()
 				.getWidth()
 				/ 2.0f - chronoMeterText.getWidth() / 2.0f, getBaseActivity()
@@ -234,11 +241,19 @@ public class MainGameScene extends KeyListenScene implements
 					@Override
 					public void onTimePassed(TimerHandler pTimerHandler) {
 						chronoCount--;
-						String secounds = String.format("%02d",
-								chronoCount / 100);
-						String centiSec = String.format("%02d",
-								chronoCount % 100);
-						chronoMeterText.setText(secounds + "'" + centiSec);
+						String minutes = "00";
+						if (chronoCount / 100 / 60 > 0) {
+							minutes = String.format("%02d",
+									chronoCount / 100 / 60);
+						}
+						String secounds = String
+								.format("%02d",
+										(chronoCount - (chronoCount / 100 / 60) * 100 * 60) / 100);
+						String centiSec = String
+								.format("%02d",
+										(chronoCount - (chronoCount / 100 / 60) * 100 * 60) % 100);
+						chronoMeterText.setText(minutes + ":" + secounds + "'"
+								+ centiSec);
 
 						if (chronoCount == 0) {
 							unregisterUpdateHandler(pTimerHandler);
@@ -252,10 +267,31 @@ public class MainGameScene extends KeyListenScene implements
 								roleText.clear();
 							}
 
-							infoText = changeText(infoText, "この色のプレイヤーに渡してください");
-							btn.setColor(boxSprite[players.get(turnPlayer)]
-									.getColor());
-							checkNextPlayer();
+							switch (phase) {
+							case PLAYERS_TURN:
+								if (turnPlayer < players.size()) {
+									infoText = changeText(infoText,
+											"この色のプレイヤーに渡してください");
+									btn.setColor(boxSprite[players
+											.get(turnPlayer)].getColor());
+									checkNextPlayer();
+								} else {
+									// 全プレイヤー終了
+									// 議論フェーズ初期画面
+									phase = TALKING;
+									infoText = changeText(infoText, "議論をスタートしますか？");
+									btn.setColor(Color.WHITE);
+									btn.setAlpha(0.15f);
+								}
+								break;
+							case TALKING:
+								phase = VOTING;
+								infoText = changeText(infoText, "議論終了");
+								break;
+							default:
+								break;
+							}
+
 						}
 						pTimerHandler.reset();
 
@@ -265,13 +301,13 @@ public class MainGameScene extends KeyListenScene implements
 		registerUpdateHandler(chronometerHandler);
 	}
 
-	private void handToNext(boolean f) {
+	private void handToNext() {
 		waitFlag = true;
-		int waitSeconds = 10;
-		SetChronometer(waitSeconds);
+		SetChronometer(playerturnTime);
 
-		if (f) {
+		if (VillagersTurn) {
 			infoText = changeText(infoText, "しばらくお待ちください");
+			VillagersTurn = false;
 		}
 	}
 
@@ -438,43 +474,19 @@ public class MainGameScene extends KeyListenScene implements
 												setRoleText(boxSprite[p]);
 											}
 										}
-										JinrohTurn = true;
 									} else if (bi.role == "怪盗") {
 										PhantomThiefNumber = bi.number;
 										infoText = changeText(infoText,
 												"怪盗先を選んでください");
 										PhantomThiefTurn = true;
 									} else {
-										goNextPlayer = true;
+										setRoleText(boxSprite[bi.number]);
+										VillagersTurn = true;
 									}
 
 									// 次のユーザへ渡す
-									if (goNextPlayer || FortuneTellerTurn
-											|| JinrohTurn || PhantomThiefTurn) {
-										turnPlayer++;
-										if (turnPlayer != players.size()) {
-											handToNext(goNextPlayer);
-										} else {
-											if (stealPlayerNumber < boxSprite.length
-													&& PhantomThiefNumber < boxSprite.length) {
-												BoxInfo ptbi = (BoxInfo) boxSprite[PhantomThiefNumber]
-														.getUserData();
-												BoxInfo stealbi = (BoxInfo) boxSprite[stealPlayerNumber]
-														.getUserData();
-												ptbi.role = stealbi.role;
-												stealbi.role = "怪盗";
-											}
-											phase = TALKING;
-											infoText = changeText(infoText,
-													"議論スタート");
-											
-											// デバッグ用
-											for (int i = 0; i < boxSprite.length; i++) {
-												setRoleText(boxSprite[i]);
-											}
-										}
-									}
-
+									turnPlayer++;
+									handToNext();
 								} else {
 									if (!bi.turn) {
 										infoText = changeText(infoText,
@@ -486,6 +498,31 @@ public class MainGameScene extends KeyListenScene implements
 						}
 					}
 				}
+				break;
+			case TALKING:
+				infoText = changeText(infoText, "議論中");
+				
+				if (stealPlayerNumber < boxSprite.length
+						&& PhantomThiefNumber < boxSprite.length) {
+					BoxInfo ptbi = (BoxInfo) boxSprite[PhantomThiefNumber]
+							.getUserData();
+					BoxInfo stealbi = (BoxInfo) boxSprite[stealPlayerNumber]
+							.getUserData();
+					ptbi.role = stealbi.role;
+					stealbi.role = "怪盗";
+				}
+				SetChronometer(takingTime);
+				
+				// 議論中は操作不可
+				// 箱を動かしたりしたら面白そうではある
+
+				// デバッグ用
+				for (int i = 0; i < boxSprite.length; i++) {
+					setRoleText(boxSprite[i]);
+				}
+				break;
+			case VOTING:
+				infoText = changeText(infoText, "投票タイム");
 				break;
 			default:
 				break;
