@@ -1,12 +1,16 @@
 package com.crossfeel.app;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 import javax.microedition.khronos.opengles.GL10;
 
+import org.andengine.audio.sound.Sound;
+import org.andengine.audio.sound.SoundFactory;
 import org.andengine.engine.handler.timer.ITimerCallback;
 import org.andengine.engine.handler.timer.TimerHandler;
 import org.andengine.entity.primitive.Rectangle;
@@ -23,10 +27,19 @@ import org.andengine.util.HorizontalAlign;
 import org.andengine.util.color.Color;
 
 import android.graphics.Typeface;
+import android.util.Log;
 import android.view.KeyEvent;
+
+/*
+ * メインゲーム部分
+ * 変数多すぎ。なんとかするべき
+ * 動作がよくわかんなくなってきてるので、綺麗にしたい
+ */
 
 public class MainGameScene extends KeyListenScene implements
 		IOnSceneTouchListener {
+
+	private GlobalsData gData;
 
 	private Text infoText;
 	private Rectangle btn;
@@ -47,6 +60,7 @@ public class MainGameScene extends KeyListenScene implements
 	private static final int PLAYERS_TURN = 1;
 	private static final int TALKING = 2;
 	private static final int VOTING = 3;
+	private static final int RESULT = 4;
 	private int phase = PLAYERS_JOIN;
 
 	private int turnPlayer = 0;
@@ -60,20 +74,37 @@ public class MainGameScene extends KeyListenScene implements
 	private int chronoCount = 0;
 	private boolean waitFlag = false;
 
-	private final int playerturnTime = 3;
-	private final int takingTime = 5;
+	private boolean votingFlag = false;
+
+	private static final int playerturnTime = 5;
+	private static final int takingTime = 5 * 60;
 
 	private List<Integer> players = new ArrayList<Integer>();
+
+	private Sound gStart, pLength, ptStart1, ptStart2, nPlayer, resultSE,
+			theEnd, talkEnd, talkStart, voteStart1, voteStart2;
+	private boolean start = true;
+	private boolean pl = false;
+	private boolean pt2 = false;
+	private boolean vs1 = false;
+	private boolean vs2 = false;
 
 	// コンストラクタ
 	public MainGameScene(MultiSceneActivity context) {
 		super(context);
+		gData = (GlobalsData) context.getApplication();
+		gData.volume = 5;
 		init();
 	}
 
 	@Override
 	public void init() {
 		setRecangleButton();
+
+		// 夜演出：虫の声
+		gData.SSClassification = 5;
+		gData.SSVolume = 3;
+		gData.SSPlayState = 1;
 
 		// テキストを書く準備
 		Texture texture = new BitmapTextureAtlas(getBaseActivity()
@@ -97,12 +128,11 @@ public class MainGameScene extends KeyListenScene implements
 
 		setBoxies();
 
-		// 画面範囲を見やすくする為の一時的な処置
-		float[] gray = HexToFloat("#666666");
-		getBackground().setColor(gray[0], gray[1], gray[2]);
-
 		// タッチ受け取るフラグ
 		setOnSceneTouchListener(this);
+
+		// アップデートハンドラ
+		registerUpdateHandler(updateHandler);
 	}
 
 	/**
@@ -183,13 +213,39 @@ public class MainGameScene extends KeyListenScene implements
 
 	@Override
 	public void prepareSoundAndMusic() {
-		// TODO Auto-generated method stub
+		try {
+			gStart = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "GameStart.wav");
+			pLength = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "PlayerLength.wav");
+			nPlayer = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "NextPlayer.wav");
+			ptStart1 = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(),
+					"PlayerTurnStart1.wav");
+			ptStart2 = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(),
+					"PlayerTurnStart2.wav");
+			resultSE = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "Result.wav");
+			talkEnd = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "TalkEnd.wav");
+			talkStart = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "TalkStart.wav");
+			theEnd = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "TheEnd.wav");
+			voteStart1 = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "VoteStart1.wav");
+			voteStart2 = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "VoteStart2.wav");
 
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
 	public boolean dispatchKeyEvent(KeyEvent e) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
@@ -219,11 +275,12 @@ public class MainGameScene extends KeyListenScene implements
 		// テキスト表示
 		String minutes = "00";
 		if (chronoCount / 100 / 60 > 0) {
-			minutes = String.format("%02d", chronoCount / 100 / 60);
+			minutes = String.format(Locale.getDefault(), "%02d",
+					chronoCount / 100 / 60);
 		}
-		String secounds = String.format("%02d",
+		String secounds = String.format(Locale.getDefault(), "%02d",
 				(chronoCount - (chronoCount / 100 / 60) * 100 * 60) / 100);
-		String centiSec = String.format("%02d",
+		String centiSec = String.format(Locale.getDefault(), "%02d",
 				(chronoCount - (chronoCount / 100 / 60) * 100 * 60) % 100);
 		chronoMeterText = new Text(0, 0, font, minutes + ":" + secounds + "'"
 				+ centiSec, 80, new TextOptions(HorizontalAlign.CENTER),
@@ -243,15 +300,20 @@ public class MainGameScene extends KeyListenScene implements
 						chronoCount--;
 						String minutes = "00";
 						if (chronoCount / 100 / 60 > 0) {
-							minutes = String.format("%02d",
-									chronoCount / 100 / 60);
+							minutes = String.format(Locale.getDefault(),
+									"%02d", chronoCount / 100 / 60);
+							if (phase == TALKING) {
+								gData.lightLevel = chronoCount / 100 / 60 + 2;
+							}
 						}
-						String secounds = String
-								.format("%02d",
-										(chronoCount - (chronoCount / 100 / 60) * 100 * 60) / 100);
-						String centiSec = String
-								.format("%02d",
-										(chronoCount - (chronoCount / 100 / 60) * 100 * 60) % 100);
+						String secounds = String.format(
+								Locale.getDefault(),
+								"%02d",
+								(chronoCount - (chronoCount / 100 / 60) * 100 * 60) / 100);
+						String centiSec = String.format(
+								Locale.getDefault(),
+								"%02d",
+								(chronoCount - (chronoCount / 100 / 60) * 100 * 60) % 100);
 						chronoMeterText.setText(minutes + ":" + secounds + "'"
 								+ centiSec);
 
@@ -269,7 +331,10 @@ public class MainGameScene extends KeyListenScene implements
 
 							switch (phase) {
 							case PLAYERS_TURN:
+								FortuneTellerTurn = false;
+								PhantomThiefTurn = false;
 								if (turnPlayer < players.size()) {
+									nPlayer.play();
 									infoText = changeText(infoText,
 											"この色のプレイヤーに渡してください");
 									btn.setColor(boxSprite[players
@@ -278,15 +343,59 @@ public class MainGameScene extends KeyListenScene implements
 								} else {
 									// 全プレイヤー終了
 									// 議論フェーズ初期画面
+									registerUpdateHandler(AsaHandler);
+
 									phase = TALKING;
-									infoText = changeText(infoText, "議論をスタートしますか？");
+									infoText = changeText(infoText,
+											"議論をスタートしますか？");
 									btn.setColor(Color.WHITE);
 									btn.setAlpha(0.15f);
+
+									turnPlayer = 0;
+									for (Iterator<Integer> iterator = players
+											.iterator(); iterator.hasNext();) {
+										Integer i = (Integer) iterator.next();
+										BoxInfo bi = (BoxInfo) boxSprite[i]
+												.getUserData();
+										bi.playerChecked = false;
+									}
 								}
 								break;
 							case TALKING:
+								talkEnd.play();
+								vs1 = true;
+								registerUpdateHandler(halfWaitHandler);
+								// TODO: 照明：夕方演出
+								// シーン切り替え
+
 								phase = VOTING;
-								infoText = changeText(infoText, "議論終了");
+								// 投票ターンの初期画面
+								// 照明：ターンを経る毎に暗く
+								waitFlag = true;
+								infoText = changeText(infoText,
+										"この色のプレイヤーへ渡してください");
+								btn.setColor(boxSprite[players.get(turnPlayer)]
+										.getColor());
+
+								TimerHandler playerToCheckMessage = new TimerHandler(
+										2.0f, new ITimerCallback() {
+
+											@Override
+											public void onTimePassed(
+													TimerHandler pTimerHandler) {
+												infoText = changeText(infoText,
+														"あなたはこの色のプレイヤーですか？");
+												btn.setColor(boxSprite[players
+														.get(turnPlayer)]
+														.getColor());
+												waitFlag = false;
+											}
+										});
+								registerUpdateHandler(playerToCheckMessage);
+								break;
+							case VOTING:
+								break;
+							case RESULT:
 								break;
 							default:
 								break;
@@ -350,6 +459,35 @@ public class MainGameScene extends KeyListenScene implements
 		this.roleText.add(roleText);
 	}
 
+	private void setVoteText(Rectangle bs) {
+		BoxInfo bi = (BoxInfo) bs.getUserData();
+
+		// テキストを書く準備
+		Texture texture = new BitmapTextureAtlas(getBaseActivity()
+				.getTextureManager(), 512, 512,
+				TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+		Font font = new Font(getBaseActivity().getFontManager(), texture,
+				Typeface.DEFAULT_BOLD, 26, true, Color.WHITE);
+		getBaseActivity().getTextureManager().loadTexture(texture);
+		getBaseActivity().getFontManager().loadFont(font);
+
+		// テキスト表示
+		Text roleText = new Text(0, 0, font, String.valueOf(bi.vote), 30,
+				new TextOptions(HorizontalAlign.CENTER), getBaseActivity()
+						.getVertexBufferObjectManager());
+
+		float x = (bs.getX() + bs.getWidth() / 2.0f) - roleText.getWidth()
+				/ 2.0f;
+		float y = bs.getY() - roleText.getHeight();
+		if (bi.number > 2) {
+			y = bs.getY() + bs.getHeight();
+		}
+		roleText.setPosition(x, y);
+
+		attachChild(roleText);
+		this.roleText.add(roleText);
+	}
+
 	// タッチイベントに対する処理
 	@Override
 	public boolean onSceneTouchEvent(Scene pScene, TouchEvent pSceneTouchEvent) {
@@ -399,7 +537,10 @@ public class MainGameScene extends KeyListenScene implements
 						Collections.sort(players);
 						phase = PLAYERS_TURN;
 
-						// 次フェーズの初期画面
+						// プレイヤーターンの初期画面
+						ptStart1.play();
+						pt2 = true;
+						registerUpdateHandler(waitHandler);
 						waitFlag = true;
 						infoText = changeText(infoText, "この色のプレイヤーへ渡してください");
 						btn.setColor(boxSprite[players.get(turnPlayer)]
@@ -450,49 +591,49 @@ public class MainGameScene extends KeyListenScene implements
 						PhantomThiefTurn = false;
 						infoText = changeText(infoText, "しばらくお待ちください");
 					}
-				} else {
-					if (touchedInfo) {
-						if (!waitFlag) {
-							if (turnPlayer < players.size()) {
-								bi = (BoxInfo) boxSprite[players
-										.get(turnPlayer)].getUserData();
-								if (bi.playerChecked) {
-									if (bi.role == "占い師" && !FortuneTellerTurn) {
-										infoText = changeText(infoText,
-												"占い先を選んでください");
-										FortuneTellerTurn = true;
-									} else if (bi.role == "人狼") {
-										infoText = changeText(infoText,
-												"仲間の人狼を確認してください");
-										for (Iterator<Integer> iterator = players
-												.iterator(); iterator.hasNext();) {
-											Integer p = (Integer) iterator
-													.next();
-											BoxInfo tmpbi = (BoxInfo) boxSprite[p]
-													.getUserData();
-											if (tmpbi.role == "人狼") {
-												setRoleText(boxSprite[p]);
-											}
-										}
-									} else if (bi.role == "怪盗") {
-										PhantomThiefNumber = bi.number;
-										infoText = changeText(infoText,
-												"怪盗先を選んでください");
-										PhantomThiefTurn = true;
-									} else {
-										setRoleText(boxSprite[bi.number]);
-										VillagersTurn = true;
-									}
+				} else if (touchedInfo) {
+					if (!waitFlag) {
+						if (turnPlayer < players.size()) {
+							// ターンを経るごとに明るく
+							gData.lightLevel = turnPlayer + 2;
 
-									// 次のユーザへ渡す
-									turnPlayer++;
-									handToNext();
-								} else {
-									if (!bi.turn) {
-										infoText = changeText(infoText,
-												"あなたの役割を確認してください");
-										bi.turn = true;
+							bi = (BoxInfo) boxSprite[players.get(turnPlayer)]
+									.getUserData();
+							if (bi.playerChecked) {
+								if (bi.role == "占い師" && !FortuneTellerTurn) {
+									infoText = changeText(infoText,
+											"占い先を選んでください");
+									FortuneTellerTurn = true;
+								} else if (bi.role == "人狼") {
+									infoText = changeText(infoText,
+											"仲間の人狼を確認してください");
+									for (Iterator<Integer> iterator = players
+											.iterator(); iterator.hasNext();) {
+										Integer p = (Integer) iterator.next();
+										BoxInfo tmpbi = (BoxInfo) boxSprite[p]
+												.getUserData();
+										if (tmpbi.role == "人狼") {
+											setRoleText(boxSprite[p]);
+										}
 									}
+								} else if (bi.role == "怪盗") {
+									PhantomThiefNumber = bi.number;
+									infoText = changeText(infoText,
+											"怪盗先を選んでください");
+									PhantomThiefTurn = true;
+								} else {
+									setRoleText(boxSprite[bi.number]);
+									VillagersTurn = true;
+								}
+
+								// 次のユーザへ渡す
+								turnPlayer++;
+								handToNext();
+							} else {
+								if (!bi.turn) {
+									infoText = changeText(infoText,
+											"あなたの役割を確認してください");
+									bi.turn = true;
 								}
 							}
 						}
@@ -500,8 +641,9 @@ public class MainGameScene extends KeyListenScene implements
 				}
 				break;
 			case TALKING:
+				talkStart.play();
 				infoText = changeText(infoText, "議論中");
-				
+
 				if (stealPlayerNumber < boxSprite.length
 						&& PhantomThiefNumber < boxSprite.length) {
 					BoxInfo ptbi = (BoxInfo) boxSprite[PhantomThiefNumber]
@@ -512,17 +654,75 @@ public class MainGameScene extends KeyListenScene implements
 					stealbi.role = "怪盗";
 				}
 				SetChronometer(takingTime);
-				
+
+				waitFlag = true;
 				// 議論中は操作不可
 				// 箱を動かしたりしたら面白そうではある
 
-				// デバッグ用
-				for (int i = 0; i < boxSprite.length; i++) {
-					setRoleText(boxSprite[i]);
-				}
+				// role丸見え(デバッグ)
+				// for (int i = 0; i < boxSprite.length; i++) {
+				// setRoleText(boxSprite[i]);
+				// }
 				break;
 			case VOTING:
-				infoText = changeText(infoText, "投票タイム");
+				// ここバグある
+				if (bi != null) {
+					if (votingFlag && bi.player && !waitFlag
+							&& bi.number != players.get(turnPlayer)) {
+						bi.vote++;
+						votingFlag = false;
+						bi.playerChecked = true;
+
+						// 本当は投票確認が欲しい
+
+						if (turnPlayer < players.size()) {
+							nPlayer.play();
+							waitFlag = true;
+							infoText = changeText(infoText, "この色のプレイヤーに渡してください");
+							btn.setColor(boxSprite[players.get(turnPlayer)]
+									.getColor());
+							checkNextPlayer();
+						} else {
+							phase = RESULT;
+							resultSE.play();
+							// TODO: 暗めの照明
+							infoText = changeText(infoText, "結果発表");
+							btn.setColor(Color.WHITE);
+							btn.setAlpha(0.15f);
+						}
+
+					}
+				} else if (touchedInfo) {
+					if (!waitFlag) {
+						if (turnPlayer < players.size()) {
+							bi = (BoxInfo) boxSprite[players.get(turnPlayer)]
+									.getUserData();
+							if (!bi.playerChecked) {
+								infoText = changeText(infoText, "投票先を決定してください");
+								votingFlag = true;
+								turnPlayer++;
+							}
+						}
+						waitFlag = false;
+					}
+					Log.d("wa", "flag: " + waitFlag + " turnP: " + turnPlayer);
+				}
+				break;
+			case RESULT:
+				// 誰が投票したかの表示が欲しい
+				// Restartが欲しい
+				if (!waitFlag) {
+					for (Iterator<Integer> iterator = players.iterator(); iterator
+							.hasNext();) {
+						Integer p = (Integer) iterator.next();
+						setVoteText(boxSprite[p]);
+						setRoleText(boxSprite[p]);
+					}
+					theEnd.play();
+					// TODO: 普通の照明
+				} else {
+
+				}
 				break;
 			default:
 				break;
@@ -548,4 +748,69 @@ public class MainGameScene extends KeyListenScene implements
 
 		return false;
 	}
+
+	private int c = 2;
+	private TimerHandler AsaHandler = new TimerHandler(0.5f, true,
+			new ITimerCallback() {
+				@Override
+				public void onTimePassed(TimerHandler pTimerHandler) {
+					if (c < 10) {
+						gData.lightLevel = c;
+						c++;
+					} else {
+						unregisterUpdateHandler(AsaHandler);
+					}
+				}
+			});
+
+	private TimerHandler waitHandler = new TimerHandler(3.0f, true,
+			new ITimerCallback() {
+
+				@Override
+				public void onTimePassed(TimerHandler pTimerHandler) {
+					if (pt2) {
+						ptStart2.play();
+						pt2 = false;
+						unregisterUpdateHandler(waitHandler);
+					} else {
+						unregisterUpdateHandler(waitHandler);
+					}
+				}
+			});
+
+	private TimerHandler halfWaitHandler = new TimerHandler(1.5f, true,
+			new ITimerCallback() {
+
+				@Override
+				public void onTimePassed(TimerHandler pTimerHandler) {
+					if (pl) {
+						pLength.play();
+						pl = false;
+					} else if (vs1) {
+						voteStart1.play();
+						vs1 = false;
+					} else if (vs2) {
+						voteStart2.play();
+						vs2 = false;
+					} else {
+						unregisterUpdateHandler(halfWaitHandler);
+					}
+				}
+			});
+
+	private TimerHandler updateHandler = new TimerHandler(1.0f, true,
+			new ITimerCallback() {
+
+				@Override
+				public void onTimePassed(TimerHandler pTimerHandler) {
+					if (start) {
+						gStart.play();
+						start = false;
+						pl = true;
+						registerUpdateHandler(halfWaitHandler);
+					} else {
+						unregisterUpdateHandler(updateHandler);
+					}
+				}
+			});
 }

@@ -1,7 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">CrossFeelApp Jinroh</string>
+    <string name="app_name">CrossFeel Jinroh</string>
     <string name="action_settings">Settings</string>
 
+    <string name="comment_BluetoothOFF">Bluetooth設定が\nONでないと利用できません\n設定を変更してもよろしいですか？</string>
+
+    <string name="dialog_YES">はい</string>
+    <string name="dialog_END">アプリ終了</string>
+    <string name="dialog_OK">OK</string>
+    <string name="dialog_NO">いいえ</string>
+    <string name="error_BtRetryError">CrossFeelからの応答がありません\n一度CrossFeelの電源を切り、Bluetoothのペアリングを解除して、接続しなおしてください</string>
+    <string name="error_BtDisconnect">CrossFeelとの\n接続が切断されました</string>
+    <string name="error_BtDisconnected">CrossFeelと\n接続されていません\n接続しますか？</string>
+    <!-- ↓ ライブラリで必要なダイアログメッセージ 
+    ↑ ライブラリで必要なダイアログメッセージ -->
+    
+        
+    <string-array name="list5">
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    </string-array>
+    <string-array name="list6">
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    	<item>6</item>
+   	</string-array>
+    <string-array name="list7">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    	<item>6</item>
+    	<item>7</item>
+    	</string-array>
+    <string-array name="list10">
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    	<item>6</item>
+    	<item>7</item>
+       	<item>8</item>
+       	<item>9</item>
+       	<item>10</item>
+　　　　</string-array>
+    <string-array name="list3">
+        <item>15</item>
+        <item>30</item>
+    	<item>60</item>
+    </string-array>
+    <string-array name="list_scene">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    </string-array>
+    <string-array name="list_tone">
+        <item>0</item>
+        <item>1</item>
+        <item>2</item>
+    	<item>3</item>
+    	<item>4</item>
+    	<item>5</item>
+    </string-array>
+    <string-array name="sleep_light">
+        <item>0</item>
+        <item>1</item>
+    </string-array>
 </resources>

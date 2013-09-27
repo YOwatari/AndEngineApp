@@ -1,9 +1,12 @@
 package com.crossfeel.app;
 
+import java.io.IOException;
 import java.util.Random;
 
 import javax.microedition.khronos.opengles.GL10;
 
+import org.andengine.audio.sound.Sound;
+import org.andengine.audio.sound.SoundFactory;
 import org.andengine.engine.handler.timer.ITimerCallback;
 import org.andengine.engine.handler.timer.TimerHandler;
 import org.andengine.entity.primitive.Rectangle;
@@ -22,6 +25,11 @@ import org.andengine.util.color.Color;
 import android.graphics.Typeface;
 import android.view.KeyEvent;
 
+/*
+ * 最初のゲーム画面
+ * Sceneで共有する部分は、KeyListenSceneに書いたほうが良い
+ */
+
 public class InitialScene extends KeyListenScene implements
 		IOnSceneTouchListener {
 	private Rectangle[] boxSprite = new Rectangle[6];
@@ -34,6 +42,13 @@ public class InitialScene extends KeyListenScene implements
 
 	private int lightningBox = 0;
 
+	private GlobalsData gData = (GlobalsData) getBaseActivity()
+			.getApplication();
+
+	private Sound titleCall;
+
+	private boolean start = true;
+
 	public InitialScene(MultiSceneActivity context) {
 		super(context);
 		init();
@@ -41,7 +56,12 @@ public class InitialScene extends KeyListenScene implements
 
 	@Override
 	public void init() {
-
+		// フェードアウトしとく
+		gData.fadeoutLight = true;
+		gData.light = 9;
+		
+		gData.volume = 5;
+		
 		Texture texture = new BitmapTextureAtlas(getBaseActivity()
 				.getTextureManager(), 512, 512,
 				TextureOptions.BILINEAR_PREMULTIPLYALPHA);
@@ -64,9 +84,9 @@ public class InitialScene extends KeyListenScene implements
 
 		setOnSceneTouchListener(this);
 
-		// 画面範囲を見やすくする為の一時的な処置
-		float[] gray = HexToFloat("#666666");
-		getBackground().setColor(gray[0], gray[1], gray[2]);
+		// 画面範囲を見やすくする(デバッグ)
+		// float[] gray = HexToFloat("#666666");
+		// getBackground().setColor(gray[0], gray[1], gray[2]);
 
 		registerUpdateHandler(pUpdateHandler);
 	}
@@ -116,19 +136,24 @@ public class InitialScene extends KeyListenScene implements
 
 	@Override
 	public void prepareSoundAndMusic() {
-		// TODO Auto-generated method stub
-
+		try {
+			titleCall = SoundFactory.createSoundFromAsset(getBaseActivity()
+					.getSoundManager(), getBaseActivity(), "TitleCall.wav");
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	@Override
 	public boolean dispatchKeyEvent(KeyEvent e) {
-		// TODO Auto-generated method stub
 		return false;
 	}
 
 	@Override
 	public boolean onSceneTouchEvent(Scene pScene, TouchEvent pSceneTouchEvent) {
 		switch (pSceneTouchEvent.getAction()) {
+		case TouchEvent.ACTION_DOWN:
+			break;
 		case TouchEvent.ACTION_UP:
 		case TouchEvent.ACTION_CANCEL:
 			ResourceUtil.getInstance(getBaseActivity()).resetAllTexture();
@@ -145,15 +170,20 @@ public class InitialScene extends KeyListenScene implements
 	}
 
 	/**
-	 * タイマーハンドラ 1秒ごとの処理
+	 * タイマーハンドラ 40Fごとの処理
 	 */
-	private TimerHandler pUpdateHandler = new TimerHandler(0.5f, true,
+	private TimerHandler pUpdateHandler = new TimerHandler(40f/60f, true,
 			new ITimerCallback() {
 
 				@Override
 				public void onTimePassed(TimerHandler pTimerHandler) {
-					boxSprite[lightningBox].setAlpha(20.0f/60.0f);
-					
+					if (start) {
+						titleCall.play();
+						start = false;
+					}
+
+					boxSprite[lightningBox].setAlpha(20.0f / 60.0f);
+
 					Random rand = new Random(System.currentTimeMillis());
 					int tmp = rand.nextInt(boxSprite.length);
 					while (lightningBox == tmp) {
